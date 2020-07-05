@@ -2,195 +2,166 @@ import cv2 as cv
 import numpy as np
 import os
 from sklearn.cluster import KMeans
-from scipy.spatial import distance
 
-def get_images(folder):
+
+def get_images(folder) -> dict:
     """
     Get images from a folder and put them into dictionaries.
     """
     images = {}
     for filename in os.listdir(folder):
-        category = filename # Dictionary name is each image name
+        category = filename  # Dictionary name is each image name
         path = folder + "/" + filename
-        img = cv.imread(path, 0) # Read in grayscale
+        img = cv.imread(path, 0)  # Read in grayscale
         images[category] = img
 
     return images
 
-train_dset = get_images("ddataset/train")
-test = get_images("ddataset/test")  # take test images
 
-def get_sift_features(images):
+class orb_features:
+    """ORB detector
+    
+    Attributes:
+        param: Parameters of the ORB detector
+        detector: Detector object
     """
-    Get SIFT features from a dictionary of images and save
-    them in a new dictionary.
-    """
-    sift_vectors = {}
-    descriptor_list = []
-    sift = cv.xfeatures2d.SIFT_create()
-    features = []
-    for cat, img in train_dset.items():
-        # cv.imshow('image', images)
-        # cv.waitKey(1000)
-        kp, des = sift.detectAndCompute(img, None)
-        descriptor_list.extend(des)
-        features.append(des)
-        sift_vectors[cat] = features
 
-        # img2 = cv.drawKeypoints(img, kp, np.array([]))
-        # cv.imshow('Kp', img2)
-        # cv.waitKey(1000)
-        
-    return [descriptor_list, sift_vectors]
+    def __init__(self):
+        self.param = dict(nfeatures=600, scaleFactor=1.2, nlevels=4,
+                          edgeThreshold=31, firstLevel=0, WTA_K=2,
+                          scoreType=cv.ORB_HARRIS_SCORE,
+                          patchSize=31, fastThreshold=20)
+        self.detector = cv.ORB_create(**self.param)
+
+    def detectFromDict(self, images_dict) -> [list, dict]:
+        """
+        Get ORB features from a dictionary of images and save
+        them in a new dictionary.
+        """
+        orb = self.detector
+        descriptor_list = []  # a list of all feaatures
+        descriptor_bycat = {}  # a dictionary of features by categories
+
+        for imgname, img in images_dict.items():
+            cat = imgname
+            kp, des = orb.detectAndCompute(img, None)
+            descriptor_list.extend(des)
+            descriptor_bycat[cat] = des
+
+        return descriptor_list, descriptor_bycat
 
 
-train_features = get_sift_features(train_dset)
-# Takes the descriptor list which are all the descriptors unordered
-train_descriptor_list = train_features[0]
-# Takes the sift descriptors separated in categories for train
-train_descriptors_bycat = train_features[1]
-# Takes the sift descriptors separated in categories for test
-test_descriptors_bycat = get_sift_features(test)[1]
-
-def kmeans(k, descriptor_list):
+def kmeans(descriptor_list) -> list:
     """
     A k-means clustering algorithm.
     
-    Takes 2 parameter:
-    k: Number of cluster(k).
-    descriptor_list: Descriptors list(unordered 1d array).
+    Inputs:
+        descriptor_list: Descriptors list(unordered nfeatures x 32 matrix).
 
-    Returns: An array that holds central points.
+    Returns: A matrix [nclusters, 32] that holds central points of the clusters.
     """
-    kmeans = KMeans(n_clusters=k, n_init=10)
-    kmeans.fit(descriptor_list)
-    visual_words = kmeans.cluster_centers_
+    k = 150
+    cluster = KMeans(n_clusters=k, n_init=10)
+    cluster.fit(descriptor_list)
 
-    return visual_words
+    return cluster.cluster_centers_
 
 
-# Takes the central points which is visual words
-visual_words = kmeans(150, train_descriptor_list)
-
-def image_class(all_bovw, centers):
+def compute_histogram(featuresbycat, centers) -> dict:
     """
-    Computes histograms of images.
+    Computes the histogram for every category
 
-    Takes 2 parameters:
-    all_bovw: Dictionary that holds the descriptors that are 
-    separated class by class.
-    descriptor_list: Array that holds the central points 
-    (visual words) of the k means clustering.
+    Inputs:
+        featuresbycat: Dictionary that contains features of each category
+        centers: A matrix [nclusters, 32] that holds central points of the clusters.
 
-    Returns: A dictionary that holds the histograms for 
-    each image separated class by class.
+    Returns: 
     """
-    dict_feature = {}
-    for key, value in all_bovw.items():
-        category = []
-        for img in value:
-            histogram = np.zeros(len(centers))
-            for each_feature in img:
-                ind = find_index(each_feature, centers)
-                histogram[ind] += 1
-            category.append(histogram)
-        dict_feature[key] = category
-    return dict_feature
+    histogrambycat = {}  # dictionary of histograms
+    nclusters = centers.shape[0]
+    histogram = np.zeros([1, nclusters])
+    for cat, features in featuresbycat.items():
+        for n in range(features.shape[0]):
+            word = matchWord(features[n, :], centers)
+            histogram[0, word] += 1
+        histogrambycat[cat] = histogram
+        histogram = np.zeros([1, nclusters])
 
-def find_index(image, center):
+    return histogrambycat
+
+
+def matchWord(feature, centers) -> int:
     """
-    Find the index of the closest central point 
-    to each sift descriptor.
-    
-    Takes 2 parameters:
-    image: A sift descriptor.
-    center: The array of central points in k means.
-    
-    Returns: the index of the closest central point.
+    Finds the matching word searching for the minimum euclidean distance
+
+    Inputs:
+        feature: A single feature (descriptor)
+        centers: A matrix [nclusters, 32] that holds central points of the clusters.
+    Returns: 
+        Index of the matched word
     """
-    count = 0
-    ind = 0
-    for i in range(len(center)):
-        if(i == 0):
-           count = distance.euclidean(image, center[i])
-           #count = L1_dist(image, center[i])
-        else:
-            dist = distance.euclidean(image, center[i])
-            #dist = L1_dist(image, center[i])
-            if(dist < count):
-                ind = i
-                count = dist
-    return ind
+    for n in range(centers.shape[0]):
+        dist = np.linalg.norm(feature - centers[n, :])  # L2-norm
+        if n == 0:
+            mindist = dist
+            minind = n
+        elif dist < mindist:
+            mindist = dist
+            minind = n
+
+    return minind
 
 
-# Creates histograms for train data
-bovw_train = image_class(train_descriptors_bycat, visual_words)
-# Creates histograms for test data
-bovw_test = image_class(test_descriptors_bycat, visual_words)
-
-
-def knn(images, tests):
+def matchCategory(trainh, testh) -> dict:
     """
-    1-NN algorithm. Prediction of the class of test images.
-    
-    Takes 2 parameters: 
-    images: Feature vectors of train images
-    tests: Feature vectors of test images
+    Finds the matching category for every image in test dataset using 1NN.
 
-    Returns: Array that holds number of test images, 
-    number of correctly predicted images and 
-    records of class based images respectively
+    Inputs:
+        trainh: Dictionary of histograms by class, from training
+        testh: Dictionary of histograms by image, from test
+    Returns: 
+        Dictionary of the test images classified
     """
-    num_test = 0
-    correct_predict = 0
-    class_based = {}
+    img_classified = {}
+    n = 0
+    for imgname, histtest in testh.items():
+        for cat, hist in trainh.items():
+            dist = np.linalg.norm(histtest - hist)  # L2-norm
+            if n == 0:
+                mindist = dist
+                classification = cat
+            elif dist < mindist:
+                mindist = dist
+                classification = cat
+            n += 1
+        img_classified[imgname] = classification
+        n = 0
 
-    for test_key, test_val in tests.items():
-        class_based[test_key] = [0, 0]  # [correct, all]
-        for tst in test_val:
-            predict_start = 0
-            #print(test_key)
-            minimum = 0
-            key = "a"  # predicted
-            for train_key, train_val in images.items():
-                for train in train_val:
-                    if(predict_start == 0):
-                        minimum = distance.euclidean(tst, train)
-                        #minimum = L1_dist(tst,train)
-                        key = train_key
-                        predict_start += 1
-                    else:
-                        dist = distance.euclidean(tst, train)
-                        #dist = L1_dist(tst,train)
-                        if(dist < minimum):
-                            minimum = dist
-                            key = train_key
-
-            if(test_key == key):
-                correct_predict += 1
-                class_based[test_key][0] += 1
-            num_test += 1
-            class_based[test_key][1] += 1
-            #print(minimum)
-    return [num_test, correct_predict, class_based]
+    return img_classified
 
 
-# Call the knn function
-results_bowl = knn(bovw_train, bovw_test)
+def main():
+    train_dset = get_images("ddataset/train")
+    test_dset = get_images("ddataset/test")  # take test images
 
-def accuracy(results):
-    """
-    Calculates the average accuracy and class based accuracies.
-    """
-    avg_accuracy = (results[1] / results[0]) * 100
-    print("Average accuracy: %" + str(avg_accuracy))
-    print("\nClass based accuracies: \n")
-    for key, value in results[2].items():
-        acc = (value[0] / value[1]) * 100
-        print(key + " : %" + str(acc))
+    # Gets all the features from the training images
+    orb = orb_features()
+    train_features, train_featuresbycat = orb.detectFromDict(train_dset)
+    # Clusters the features using kmeans
+    vw_centers = kmeans(train_features)
+    # Compute histograms for every category in train dataset
+    train_histogrambycat = compute_histogram(train_featuresbycat, vw_centers)
+
+    # Get features and compute histrograms for every image in test dataset
+    test_features, test_featuresbycat = orb.detectFromDict(test_dset)
+    test_histogrambycat = compute_histogram(test_featuresbycat, vw_centers)
+
+    # Classify the test images into the trainned categories
+    classification_results = matchCategory(
+        train_histogrambycat, test_histogrambycat)
+    print("Classification results: ")
+    print(classification_results)
 
 
-# Calculates the accuracies and write the results to the console.
-accuracy(results_bowl)
-
-bump = 0
+if __name__ == "__main__":
+    main()

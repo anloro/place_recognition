@@ -86,11 +86,11 @@ class orb_features:
 
         # Organize normalized features by class for train and test
         for cat, nfeatures in traininfo.items():
-            trainbycat_n[cat] = allfeatureslist[0:nfeatures-1]
-            allfeatureslist = allfeatureslist[nfeatures:-1]
+            trainbycat_n[cat] = allfeatureslist[0:nfeatures]
+            allfeatureslist = allfeatureslist[nfeatures+1:-1]
         for cat, nfeatures in testinfo.items():
-            testbycat_n[cat] = allfeatureslist[0:nfeatures-1]
-            allfeatureslist = allfeatureslist[nfeatures:-1]
+            testbycat_n[cat] = allfeatureslist[0:nfeatures]
+            allfeatureslist = allfeatureslist[nfeatures+1:-1]
 
         return trainlist, trainbycat_n, testlist, testbycat_n
 

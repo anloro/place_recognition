@@ -15,7 +15,7 @@ def ImageClass(sequence_folder):
     pic_no=0
     seq_no=0
     for heir in sorted(os.walk(sequence_folder)):
-        print(heir)        #(heir[2][len(heir)-2])
+        #print(heir)        #(heir[2][len(heir)-2])
 
     
         
@@ -33,28 +33,67 @@ def ImageClass(sequence_folder):
             total_f= nlvl_1f*nlvl_2f
             lvl_2s=heir[1][0]
         if n >1: 
-            print(len(root)+len(lvl_1s)+len(lvl_2s)+1)
+            #print(len(root)+len(lvl_1s)+len(lvl_2s)+1)
             if len(heir[0])==len(root)+len(lvl_1s)+1 :
-                print('seq')
+                #print('seq')
                 seq_no=pic_no
             elif len(heir[0]) == len(root)+len(lvl_1s)+len(lvl_2s)+2 :
                 f_no=(int(heir[0][len(heir[0])-1]))
                 local_no=0
-                print(f_no)
+                #print(f_no)
                 for pic in heir[2]:
                     if pic[0] == '.' :
                         pass
                     else :
                     #             #print(heir[2])
                                  pic_no = pic_no+1
+                    #             local_no = int(heir[2][0:3])
+                                 file_loc= os.path.join(heir[0],pic)
+                                 img=cv.imread(file_loc)
+                    #             #print(pic)
+                    #             #print(file_loc)
+                    #             #print('f0%dp0%d'%(f_no,pic_no))
+                                 pic_dic['0%d'%((5*local_no)+f_no+seq_no)] =img
+                    #             #print((5*local_no)+f_no+seq_no)
+                    #             print(local_no,f_no,seq_no)
                                  pic_index[(nlvl_2f*local_no)+f_no+seq_no]=['f0%d%s' % (f_no, pic)]
 
                                  local_no = local_no+1
-                    
+                    #     else:
+
+                    #         pass
         
         n =n+1
-    
-    return pic_index
+    #     if n >0 :
+    #         #print(heir[0][(len(heir[0])-8):len(heir[0])])
+    #         if heir[1][0:3] == 'cam':
+    #             f_no = int(heir[1][4])
+
+    #         if heir[1][0:3] == 'Seq':
+    #             seq_no = pic_no
+    #         #pic_no=0
+    #         local_no=0
+    #         for pic in heir[2] :
+    #             #print(heir[2])
+    #             pic_no = pic_no+1
+    #             local_no = int(heir[2][0:3])
+    #             file_loc= os.path.join(heir[0],pic)
+    #             #img=cv.imread(file_loc)
+    #             #print(pic)
+    #             #print(file_loc)
+    #             #print('f0%dp0%d'%(f_no,pic_no))
+    #             #pic_dic['0%d'%((5*local_no)+f_no+seq_no)] =img
+    #             #print((5*local_no)+f_no+seq_no)
+    #             print(local_no,f_no,seq_no)
+    #             pic_index[(5*local_no)+f_no+seq_no]=['f0%d%s' % (f_no, pic)]
+
+    #             #local_no = local_no+1
+    #     else:
+            
+    #         pass 
+    return pic_index,pic_dic
+
+ImageClass(sequence_folder)
 
 
 with h5py.File("/Volumes/TOSHIBA EXT/Python/W17/W17_similarity.h5", "r") as f:
@@ -88,7 +127,7 @@ def get_grps(gt_labels):
                     #print(t)
                     #t=images['%d'%t]
                     #z=images['%d'%z]
-                    #print(z,t)
+                    print(z,t)
                     t=np.append(z,t)
                     #print(t)
                     match_list.append(t)
@@ -102,7 +141,7 @@ def get_grps(gt_labels):
         bb=np.zeros(np.shape(aa.flatten()))
         bb[ind] = 1
         bb= np.reshape(bb,np.shape(aa))
-        cc = bb*aa.astype(int)
+        cc = (bb*aa).astype(int)
         grp_count=0
         final_dict ={'grp':'indices'}
         for n in range(0,len(a)-1) :
@@ -112,3 +151,14 @@ def get_grps(gt_labels):
                 grp_count = grp_count+1
         return final_dict
 
+
+def matched_files(sequence_folder,gt_labels):
+    pic_index,pic_dic = ImageClass(sequence_folder)
+    test_dict = get_grps(gt_labels)
+    matched_file=[]
+    for n in range (0,len(test_dict)):
+        temp= test_dict['grp%d'%(n)]
+        for n1 in range(0,np.size(temp)):
+            #print(n1)
+            matched_file=np.append(matched_file,pic_index[n1+1])
+        print(matched_file)

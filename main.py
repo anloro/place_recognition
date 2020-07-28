@@ -10,11 +10,25 @@ def get_images(folder) -> dict:
     Get images from a folder and put them into dictionaries.
     """
     images = {}
-    for filename in os.listdir(folder):
-        category = filename  # Dictionary name is each image name
-        path = folder + "/" + filename
-        img = cv.imread(path, 0)  # Read in grayscale
-        images[category] = img
+    if folder == "ddataset/train":
+        img_list = []
+        dic = {"a": ["a01.png", "a02.png",
+                     "a03.png", "a04.png", "a05.png"],
+               "b": ["b02.png"],
+               "c": ["c01.png"]}
+        for k in dic.keys():
+            for filename in dic[k]:
+                path = folder + "/" + filename
+                img = cv.imread(path, 0)  # Read in grayscale
+                img_list.append(img)
+            images[k] = img_list
+            img_list = []
+    else:
+        for filename in os.listdir(folder):
+            category = filename  # Dictionary name is each image name
+            path = folder + "/" + filename
+            img = cv.imread(path, 0)  # Read in grayscale
+            images[category] = img
 
     return images
 
@@ -42,15 +56,20 @@ class orb_features:
         """
         orb = self.detector
         descriptor_list = []  # a list of all features
+        l = [] # a list for the features of each category
         descriptor_bycat = {}  # a dictionary of features by categories
 
         for labels, img in images_dict.items():
+            print(type(img))
             if isinstance(img, list):
                 # if is a list then it is the dictionary with the classified images
                 for n in range(len(img)):
-                    kp, des = orb.detectAndCompute(img, None)
+                    nimg = img[n]
+                    kp, des = orb.detectAndCompute(nimg, None)
                     descriptor_list.extend(des)
-                    descriptor_bycat[labels] = des
+                    l.extend(des)
+                descriptor_bycat[labels] = l
+                l = []
             else: 
                 kp, des = orb.detectAndCompute(img, None)
                 descriptor_list.extend(des)
@@ -69,10 +88,10 @@ class orb_features:
 
         # Get a list of all features
         for cat, features in trainbycat.items():
-            traininfo[cat] = features.shape[0]
+            traininfo[cat] = len(features)
             allfeatureslist.extend(features)
         for cat, features in testbycat.items():
-            testinfo[cat] = features.shape[0]
+            testinfo[cat] = len(features)
             allfeatureslist.extend(features)
 
         # Normalize it
@@ -81,8 +100,8 @@ class orb_features:
         # Get the lists of normalized values for train and test
         ntrain = sum(traininfo.values()) 
         ntest = sum(testinfo.values())
-        trainlist = allfeatureslist[0:ntrain-1]
-        testlist = allfeatureslist[ntrain: ntest-1]
+        trainlist = allfeatureslist[0:ntrain]
+        testlist = allfeatureslist[ntrain:ntrain+ntest]
 
         # Organize normalized features by class for train and test
         for cat, nfeatures in traininfo.items():
@@ -111,29 +130,6 @@ class bow():
         Sets a new classifying threshold.
         """
         self.t = threshold
-
-    def normalizeData(self, data):
-        """ 
-        Preprocesses the data by centering to the mean 
-        and component wise scaling to unit variance.
-        """ 
-        if isinstance(data, dict):
-            v = list(data.values())
-            for l in range(len(v)):
-                lists = v[l]
-                lists = preprocessing.normalize(lists, norm='l2')
-                # for f in range(lists.shape[0]):
-                #     singlefeatures = lists[f]
-                    # featuresfloat = [float(i) for i in singlefeatures]
-                    # factorl2 = 1/np.linalg.norm(featuresfloat)
-                    # lists[f] = [i * factorl2 for i in featuresfloat]
-            count = 0
-            for keys in data.keys():
-                data[keys] = v[count]
-        else: 
-            data = preprocessing.normalize(data, norm='l2')
-
-        return data
         
     def kmeans(self, descriptor_list: list) -> list:
         """
@@ -169,9 +165,11 @@ class bow():
         centers = self.vw_centers
         histogram = np.zeros([1, self.nclusters])
         for cat, features in featuresbycat.items():
-            for n in range(features.shape[0]):
-                word = self.matchWord(features[n, :])
+            for n in range(len(features)):
+                word = self.matchWord(features[n])
                 histogram[0, word] += 1
+            m = np.amax(histogram)
+            histogram = histogram/m
             histogrambycat[cat] = histogram
             histogram = np.zeros([1, self.nclusters])
 
@@ -203,7 +201,8 @@ class bow():
 
     def matchCategory(self, trainh: dict, testh: dict) -> dict:
         """
-        Finds the matching category for every image in test dataset using 1NN.
+        Finds the matching category for every image in test dataset using 1NN
+        Nearest Neightbour with k=1.
 
         Inputs:
             trainh: Dictionary of histograms by class, from training.
@@ -220,8 +219,24 @@ class bow():
                     classification = cat
             img_classified[imgname] = classification
             classification = np.nan
+        
+        similMat = self.createSimilarityMat(img_classified)
 
-        return img_classified
+        return similMat
+    
+    def createSimilarityMat(self, classifications: dict):
+        img_names = list(classifications.keys())
+        img_cats = list(classifications.values())
+        size = len(img_names)
+        similarityMat = np.zeros([size, size])
+        for ii in range(size):
+            img_name = img_names[ii]
+            cat = classifications[img_name]
+            for jj in range(size):
+                c = img_cats[jj]
+                if cat == c and ii != jj:
+                    similarityMat[ii,jj] = 1
+        return similarityMat
 
     def findThreshold(self, trainh: dict, testh: dict):
         """
@@ -243,7 +258,7 @@ class bow():
 def main():
     # Obtain images by name and by class from dataset
     train_dset_bycat = get_images("ddataset/train")
-    train_dset_byname = get_images("ddataset/train")
+    # train_dset_byname = get_images("ddataset/train")
     test_dset_byname = get_images("ddataset/test")  # take test images
 
     # Gets all the features from the training images
@@ -275,3 +290,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# To DO: Normalize or not? What number of features? What number of cluster centers? 
+#        Does it work with several entries for a class?

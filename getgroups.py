@@ -3,7 +3,7 @@ import h5py
 from scipy.spatial.distance import squareform
 import numpy as np
 import cv2 as cv
-
+import re 
 
 def getImgpaths(folder: str) -> dict:
     """
@@ -17,29 +17,66 @@ def getImgpaths(folder: str) -> dict:
     locs = {} # Dictionary with the locations
     unord_locs = {}
     # Gets all the images knowing all directories have the same structure.
-    lvl = {}
+    lvl_cam = {} # Stores the amount of images in each cam folder
     n = 0
     for heir in sorted(os.walk(folder)):
-        if heir[1] == []:
-            lvl[heir[0]] = len(heir[2])
+        if heir[1] == []: # if you are in the last folder of a tree
+            lvl_cam[heir[0]] = len(heir[2]) # save the number of images
             for img in sorted(heir[2]):
-                loc = heir[0] + '/' + img
-                unord_locs[n] = loc
+                loc = heir[0] + '/' + img # add to the path the img
+                unord_locs[n] = loc # and store the path
                 n += 1
+
     # Order them in the similarity matrix order
-    N = max(lvl.values())
-    n = 0
-    for nn in range(N):
-        offset = 0
-        for c in lvl.keys():
-            if nn < lvl[c]:
-                n_order = nn + offset
-                locs[n] = unord_locs[n_order]
-                n += 1
-            offset += lvl[c]
+    N = max(lvl_cam.values())
+    nn = 0
+    seq, cam = searchSeq(unord_locs)
+    aa = '-'.join(list(unord_locs.values()))
+    for s in seq:
+        for n in range(2*N):
+            n = str(n)
+            i = '0'*(3-len(n)) + n +'.png'
+            for c in cam:
+                name = folder + s + c + '/' + i
+                sear = re.search(name, aa)
+                if  sear is not None: # check if is in the list
+                    locs[nn] = name
+                    nn += 1
     
     return locs
 
+
+def searchSeq(my_dict):
+    """
+    Searches for the different levels inside the 
+    folder tree.
+
+    mydict: is the dictionary with the path of all the
+        files in the folder tree.
+    """
+    lvl = []
+    seq = []  # list of sequence folders
+    cam = []  # list of cam folders
+    pos = []
+    values = my_dict.values()
+    for name in values:
+        for match in re.finditer('/', name):
+            p = match.start()
+            pos.append(p) # find all positions of /
+        for n in range(len(pos)-1):
+            start = pos[n]
+            end = pos[n+1]
+            lvl.append(name[start:end])
+        pos = []
+
+    lvl = list(dict.fromkeys(lvl))
+    for l in lvl:
+        if re.search("Sequence", l):
+            seq.append(l)
+        if re.search("cam", l):
+            cam.append(l)
+
+    return seq, cam
 
 def get_grps(folder):
     """

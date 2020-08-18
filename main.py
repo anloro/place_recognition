@@ -6,6 +6,7 @@ from sklearn import preprocessing
 import h5py
 from scipy.spatial.distance import squareform
 import time 
+# from scipy.spatial import distance
 
 # -------------- Data acquisition part
 
@@ -142,6 +143,8 @@ def get_grps(folder):
         temp1 = np.nonzero(cc[n])
         if np.size(temp1) > 0:  # if there is a match
             # increase group count and add it to one group of the final dictionary
+            if n == 1:
+                temp1 = np.insert(temp1, 0, [0])
             final_dict['grp%d' % grp_count] = cc[n][temp1]
             grp_count = grp_count+1
 
@@ -357,6 +360,7 @@ class bow():
             Index of the matched word.
         """
         centers = self.vw_centers
+
         for n in range(centers.shape[0]):
             dist = np.linalg.norm(feature - centers[n, :])  # L2-norm
             if n == 0:
@@ -381,6 +385,7 @@ class bow():
         """
         img_classified = {}
         classification = np.nan
+
         for imgname, histtest in testh.items():
             for cat, hist in trainh.items():
                 dist = np.linalg.norm(histtest - hist)  # L2-norm
@@ -426,10 +431,14 @@ class bow():
 
 def main():
     train_folder = "dataset/W17"  # Location of the dataset.
-
-    loc_dict = getImgpaths(train_folder)
+    test_folder = "dataset/W17"  
+    
+    # Get the training dataset
+    train_dict = getImgpaths(train_folder)
     grp_dict = get_grps(train_folder)
-    loc_bygrp = setGroups(loc_dict, grp_dict)
+    loc_bygrp = setGroups(train_dict, grp_dict)
+    # Get the test dataset
+    test_dict = getImgpaths(train_folder)
 
     # # Obtain images by name and by class from dataset
     # train_dset_bycat = get_images("ddataset/train")
@@ -440,7 +449,7 @@ def main():
     orb = orb_features()
     train_features, train_featuresbycat = orb.detectFromDict(loc_bygrp)
     # Get all the features from the test images
-    test_features, test_featuresbycat = orb.detectFromDict(loc_dict)
+    test_features, test_featuresbycat = orb.detectFromDict(test_dict)
     # Normalize them
     train_features, train_featuresbycat, test_features, test_featuresbycat = \
     orb.normalizeAllFeatures(train_featuresbycat, test_featuresbycat)

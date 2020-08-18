@@ -6,6 +6,7 @@ from sklearn import preprocessing
 import h5py
 from scipy.spatial.distance import squareform
 import time 
+import re
 # from scipy.spatial import distance
 
 # -------------- Data acquisition part
@@ -360,7 +361,7 @@ class bow():
             Index of the matched word.
         """
         centers = self.vw_centers
-
+        # distance.cdist(coords, coords, 'euclidean')
         for n in range(centers.shape[0]):
             dist = np.linalg.norm(feature - centers[n, :])  # L2-norm
             if n == 0:
@@ -385,7 +386,9 @@ class bow():
         """
         img_classified = {}
         classification = np.nan
-
+        # distance.cdist(coords, coords, 'euclidean')
+        #  aqui habria que calcular la distancia y meter
+        #  el threshold de algun modo
         for imgname, histtest in testh.items():
             for cat, hist in trainh.items():
                 dist = np.linalg.norm(histtest - hist)  # L2-norm

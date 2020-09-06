@@ -7,7 +7,8 @@ import h5py
 from scipy.spatial.distance import squareform
 import time 
 import re
-# from scipy.spatial import distance
+import pickle
+from scipy.spatial import distance
 
 # -------------- Data acquisition part
 
@@ -273,16 +274,16 @@ class orb_features:
         # Get the lists of normalized values for train and test
         ntrain = sum(traininfo.values()) 
         ntest = sum(testinfo.values())
-        trainlist = allfeatureslist[0:ntrain]
-        testlist = allfeatureslist[ntrain:ntrain+ntest]
+        trainlist = allfeatureslist[0:ntrain-1]
+        testlist = allfeatureslist[ntrain:ntrain+ntest-1]
 
         # Organize normalized features by class for train and test
         for cat, nfeatures in traininfo.items():
             trainbycat_n[cat] = allfeatureslist[0:nfeatures]
-            allfeatureslist = allfeatureslist[nfeatures+1:-1]
+            allfeatureslist = allfeatureslist[nfeatures:]
         for cat, nfeatures in testinfo.items():
             testbycat_n[cat] = allfeatureslist[0:nfeatures]
-            allfeatureslist = allfeatureslist[nfeatures+1:-1]
+            allfeatureslist = allfeatureslist[nfeatures:]
 
         return trainlist, trainbycat_n, testlist, testbycat_n
 
@@ -362,14 +363,19 @@ class bow():
         """
         centers = self.vw_centers
         # distance.cdist(coords, coords, 'euclidean')
-        for n in range(centers.shape[0]):
-            dist = np.linalg.norm(feature - centers[n, :])  # L2-norm
-            if n == 0:
-                mindist = dist
-                minind = n
-            elif dist < mindist:
-                mindist = dist
-                minind = n
+        l = len(centers)
+        f = np.tile(feature, l)
+        c = np.reshape(centers,(1,-1))
+        d = np.linalg.norm(np.reshape(f-c, (l, -1)), axis=1)
+        minind = np.argmin(d)
+        # for n in range(centers.shape[0]):
+        #     dist = np.linalg.norm(feature - centers[n, :])  # L2-norm
+        #     if n == 0:
+        #         mindist = dist
+        #         minind = n
+        #     elif dist < mindist:
+        #         mindist = dist
+        #         minind = n
 
         return minind
 
@@ -386,16 +392,36 @@ class bow():
         """
         img_classified = {}
         classification = np.nan
+
+        flat_te = []
+        for sublist in list(testh.values()):
+            for item in sublist:
+                flat_te.append(item)
+        flat_tr = []
+        for sublist in list(trainh.values()):
+            for item in sublist:
+                flat_tr.append(item)
+        d = distance.cdist(flat_te, flat_tr, metric='euclidean')
+        mask = np.empty(d.shape)
+        mask[:] = np.inf
+        mask[d < np.mean(d)] = 1
+        d_masked = np.multiply(d,mask)
+        class_mask = np.sum(~np.isinf(mask),axis=1)==0 # check if all elements in a row are inf
+        classification = np.argmin(d_masked, axis=1).astype(float)
+        classification[class_mask] = np.nan
+        keys = list(testh.keys())
+        img_classified = dict(zip(keys, classification.T))
+        
         # distance.cdist(coords, coords, 'euclidean')
         #  aqui habria que calcular la distancia y meter
         #  el threshold de algun modo
-        for imgname, histtest in testh.items():
-            for cat, hist in trainh.items():
-                dist = np.linalg.norm(histtest - hist)  # L2-norm
-                if dist < self.t:
-                    classification = cat
-            img_classified[imgname] = classification
-            classification = np.nan
+        # for imgname, histtest in testh.items():
+        #     for cat, hist in trainh.items():
+        #         dist = np.linalg.norm(histtest - hist)  # L2-norm
+        #         if dist < self.t:
+        #             classification = cat
+        #     img_classified[imgname] = classification
+        #     classification = np.nan
         
         similMat = self.createSimilarityMat(img_classified)
 
@@ -420,55 +446,107 @@ class bow():
         Finds ans sets a new threshold based on the distances 
         of the test and training histogram sets.
         """
-        dist_list = np.array([])
-        for imgname, histtest in testh.items():
-            for cat, hist in trainh.items():
-                dist = np.linalg.norm(histtest - hist)  # L2-norm
-                dist_list = np.append(dist_list, dist)
-        distmin = np.min(dist_list)
-        distmean = np.mean(dist_list)
+        flat_te = []
+        for sublist in list(testh.values()):
+            for item in sublist:
+                flat_te.append(item)
+        flat_tr = []
+        for sublist in list(trainh.values()):
+            for item in sublist:
+                flat_tr.append(item)
+        d = distance.cdist(flat_te, flat_tr, metric='euclidean')
+        distmin = np.min(d)
+        distmean = np.mean(d)
         t = distmean - (distmean-distmin)/2
+        
+        # dist_list = np.array([])
+        # for imgname, histtest in testh.items():
+        #     for cat, hist in trainh.items():
+        #         dist = np.linalg.norm(histtest - hist)  # L2-norm
+        #         dist_list = np.append(dist_list, dist)
+        # distmin = np.min(dist_list)
+        # distmean = np.mean(dist_list)
+        # t = distmean - (distmean-distmin)/2
         self.setThreshold(t)
 
 
+def save_obj(name, obj):
+    with open(name, 'wb') as f:
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+
+def load_obj(name):
+    with open(name, 'rb') as f:
+        return pickle.load(f)
 
 def main():
+    start_time = time.time()
     train_folder = "dataset/W17"  # Location of the dataset.
     test_folder = "dataset/W17"  
-    
-    # Get the training dataset
-    train_dict = getImgpaths(train_folder)
-    grp_dict = get_grps(train_folder)
-    loc_bygrp = setGroups(train_dict, grp_dict)
-    # Get the test dataset
-    test_dict = getImgpaths(train_folder)
+
+    pathtr = ("features/%s_tr.pkl" % (train_folder[-3:]))
+    pathte = ("features/%s_te.pkl" % (test_folder[-3:]))
+
+    if not os.path.exists('features'):
+        os.makedirs('features')  # create a features dir
+
+    if os.path.exists(pathtr) and os.path.exists(pathte):
+        pass
+    else:
+        print("--- Obtaining images: %s seconds ---" % (time.time() - start_time))
+        # Get the training dataset
+        train_dict = getImgpaths(train_folder)
+        grp_dict = get_grps(train_folder)
+        loc_bygrp = setGroups(train_dict, grp_dict)
+        # Get the test dataset
+        test_dict = getImgpaths(train_folder)
+        print("--- Images obtained: %s seconds ---" % (time.time() - start_time))
 
     # # Obtain images by name and by class from dataset
     # train_dset_bycat = get_images("ddataset/train")
     # # train_dset_byname = get_images("ddataset/train")
     # test_dset_byname = get_images("ddataset/test")  # take test images
 
-    # Gets all the features from the training images
+    # Gets all the ORB features 
+    print("--- Obtaining features: %s seconds ---" % (time.time() - start_time))
     orb = orb_features()
-    train_features, train_featuresbycat = orb.detectFromDict(loc_bygrp)
-    # Get all the features from the test images
-    test_features, test_featuresbycat = orb.detectFromDict(test_dict)
+    if os.path.exists(pathtr) and os.path.exists(pathte):
+        print("--- Loading.. ---")
+        train_featuresbycat = load_obj(pathtr)
+        test_featuresbycat = load_obj(pathte)
+    else:
+        print("--- Calculating.. ---")
+        # Gets all the features from the training images
+        train_features, train_featuresbycat = orb.detectFromDict(loc_bygrp)
+        save_obj(pathtr, train_featuresbycat)  # save it for later uses
+        # Get all the features from the test images
+        test_features, test_featuresbycat = orb.detectFromDict(test_dict)
+        save_obj(pathte, test_featuresbycat)  # save it for later uses
+    print("--- Features ontained: %s seconds ---" % (time.time() - start_time))
     # Normalize them
     train_features, train_featuresbycat, test_features, test_featuresbycat = \
     orb.normalizeAllFeatures(train_featuresbycat, test_featuresbycat)
 
+    # Initialize BOW
+    # bow_obj = load_obj("features/bowc.pkl")
+    print("--- Beginning BOW: %s seconds ---" % (time.time() - start_time))
     bow_obj = bow()
     # Clusters the features using kmeans
+    print("--- Computing centers: %s seconds ---" % (time.time() - start_time))
     bow_obj.kmeans(train_features)
-    # Compute histograms for every category in train dataset
-    train_histogrambycat = bow_obj.compute_histogram(train_featuresbycat)
+    print("--- Centers computed: %s seconds ---" % (time.time() - start_time))
 
+    # Compute histograms for every category in train dataset
+    print("--- Computing histograms for train: %s seconds ---" % (time.time() - start_time))
+    train_histogrambycat = bow_obj.compute_histogram(train_featuresbycat)
     # Compute histrograms for every image in test dataset
+    print("--- Computing histograms for test: %s seconds ---" % (time.time() - start_time))
     test_histogrambycat = bow_obj.compute_histogram(test_featuresbycat)
 
     # Find new threshold
     bow_obj.findThreshold(train_histogrambycat, test_histogrambycat)
     # Classify the test images into the trainned categories
+    print("--- Classifying test images: %s seconds ---" % (time.time() - start_time))
     classification_results = bow_obj.matchCategory(
         train_histogrambycat, test_histogrambycat)
     print("Classification results: ")

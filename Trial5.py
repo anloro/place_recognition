@@ -7,6 +7,8 @@ import h5py
 from scipy.spatial.distance import squareform
 import time 
 import re
+import math
+import matplotlib.pyplot as plt
 # from scipy.spatial import distance
 
 with h5py.File("dataset/W17/W17_similarity.h5", "r") as f:

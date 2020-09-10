@@ -10,7 +10,7 @@ import re
 import pickle
 from scipy.spatial import distance
 import math
-import
+import matplotlib.pyplot as plt
 
 with h5py.File("dataset/W17/W17_similarity.h5", "r") as f:
         GroundTruth = f["sim"][:].flatten()
@@ -580,8 +580,7 @@ def PR(gt_labels,ts_labels):
                     TN+=1
                 elif gt_labels[i][j] == True:
                     FN+=1
-            
-            
+                
     Precision = TP/(TP+FP)
     Recall = TP/(TP+FN)
     F1 = 2*(Precision*Recall)/(Precision+Recall)
@@ -591,64 +590,20 @@ def PR(gt_labels,ts_labels):
     print(F1)
     
     return Precision, Recall, F1
-
-def aveP(A, B):
-# Precision and Recall should be a array (by varying threshold)
-    n = len(A)
-    AP = 0
-    pre = 0
-    for i in range(0,n):
-        Recall = B[i]
-        Precision = A[i]
-        if i !=0:
-            AP+=(Recall-pre)*Precision
-        else:
-            AP+=(Recall-0)*Precision
-        pre = Recall
-        
-    return AP
-
-def quaternion(qi):
-# Compute delta phi from quaterions
-# Input: pose-liked quaternion
-    
-    [n,m] = qi.shape
-    phi = np.zeros((n,n))
-    for i in range (0,n):
-        for j in range (0,n):
-            InProd = 0
-            if i == j:
-                phi[i][j] = 0 ;
-            else:
-                for k in range (3,7):
-                    InProd += qi[i][k]*qi[j][k]
-                
-                distance = 1 - InProd**2
-                phi[i][j] = math.acos(-2*distance+1)*180/math.pi  
-    return phi
-    
     
 if __name__ == "__main__":
     start_time = time.time()
     # Create empty array
-    arrayP = []
-    arrayR = []
-    arrayF = []
+    # arrayP = []
+    # arrayR = []
+    # arrayF = []
     
     # Set different classification threshold
-    for i in range(4,5):
-        [Precision, Recall, F1] = main(i)
-        arrayP.append(Precision)
-        arrayR.append(Recall)
-        arrayF.append(F1)
-    
+    #for i in range(4,5):
+    #    [Precision, Recall, F1] = main(i)
+    #    arrayP.append(Precision)
+    #    arrayR.append(Recall)
+    #    arrayF.append(F1)
+    [Precision, Recall, F1] = main(4)  
+
     print("--- %s seconds ---" % (time.time() - start_time))
-    # Depict PR curve
-    # plt.figure(1)
-    # plt.plot(arrayR,arrayP)
-    # plt.xlabel("Recall")
-    # plt.ylabel("Precision")
-    # plt.show()
-    
-    # Calculate average precision
-    # AP = aveP(arrayP, arrayR) 

@@ -513,9 +513,9 @@ def PR(gt_labels,ts_labels):
     
     return Precision, Recall, F1
 
-def aveP(Precision, Recall):
+def aveP(A, B):
 # Precision and Recall should be a array (by varying threshold)
-    n = len(Precision)
+    n = len(A)
     AP = 0
     for i in range(0,n):
         Recall = B[i]
@@ -570,4 +570,4 @@ if __name__ == "__main__":
     plt.show()
     
     # Calculate average precision
-    #AP = aveP(arrayP, arrayR) 
+    AP = aveP(arrayP, arrayR) 

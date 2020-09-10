@@ -570,4 +570,5 @@ if __name__ == "__main__":
     plt.show()
     
     # Calculate average precision
+
     AP = aveP(arrayP, arrayR) 

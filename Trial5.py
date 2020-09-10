@@ -556,7 +556,7 @@ if __name__ == "__main__":
     arrayF = []
     
     # Set different classification threshold
-    for i in range(5,6):
+    for i in range(4,5):
         [Precision, Recall, F1] = main(i)
         arrayP.append(Precision)
         arrayR.append(Recall)
@@ -570,4 +570,4 @@ if __name__ == "__main__":
     plt.show()
     
     # Calculate average precision
-    AP = aveP(arrayP, arrayR) 
+    #AP = aveP(arrayP, arrayR) 

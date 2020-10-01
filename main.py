@@ -402,28 +402,21 @@ class bow():
             for item in sublist:
                 flat_tr.append(item)
         d = distance.cdist(flat_te, flat_tr, metric='euclidean')
-        mask = np.empty(d.shape)
-        mask[:] = np.inf
-        mask[d < np.mean(d)] = 1
-        d_masked = np.multiply(d,mask)
-        class_mask = np.sum(~np.isinf(mask),axis=1)==0 # check if all elements in a row are inf
-        classification = np.argmin(d_masked, axis=1).astype(float)
-        classification[class_mask] = np.nan
-        keys = list(testh.keys())
-        img_classified = dict(zip(keys, classification.T))
+        d = d/np.max(d)
+        similMat = d < self.t
+
+        # mask = np.empty(d.shape)
+        # mask[:] = np.inf
+        # mask[d < self.t] = 1
+        # d_masked = np.multiply(d,mask)
+        # class_mask = np.sum(~np.isinf(mask),axis=1)==0 # check if all elements in a row are inf
+        # classification = np.argmin(d_masked, axis=1).astype(float)
+        # classification[class_mask] = np.nan
+
+        # keys = list(testh.keys())
+        # img_classified = dict(zip(keys, classification.T))
         
-        # distance.cdist(coords, coords, 'euclidean')
-        #  aqui habria que calcular la distancia y meter
-        #  el threshold de algun modo
-        # for imgname, histtest in testh.items():
-        #     for cat, hist in trainh.items():
-        #         dist = np.linalg.norm(histtest - hist)  # L2-norm
-        #         if dist < self.t:
-        #             classification = cat
-        #     img_classified[imgname] = classification
-        #     classification = np.nan
-        
-        similMat = self.createSimilarityMat(img_classified)
+        # similMat = self.createSimilarityMat(img_classified)
 
         return similMat
     
@@ -528,7 +521,9 @@ def main():
     orb.normalizeAllFeatures(train_featuresbycat, test_featuresbycat)
 
     # Initialize BOW
-    # bow_obj = load_obj("features/bowc.pkl")
+    # if os.path.exists("features/bowc.pkl"):
+    #      bow_obj = load_obj("features/bowc.pkl")
+    # else: 
     print("--- Beginning BOW: %s seconds ---" % (time.time() - start_time))
     bow_obj = bow()
     # Clusters the features using kmeans

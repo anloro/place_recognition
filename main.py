@@ -295,7 +295,7 @@ class bow():
             t: numerical threshold for classifying.
             vw_centers: list of the cluster centers for the visual words.
         """
-        self.t = 1 
+        self.t = 0.6
         self.vw_centers = []
         self.nclusters = 150
     
@@ -403,7 +403,14 @@ class bow():
                 flat_tr.append(item)
         d = distance.cdist(flat_te, flat_tr, metric='euclidean')
         d = d/np.max(d)
-        similMat = d < self.t
+        class_mat = d < self.t
+
+        # classification = {}
+        # for c in range(len(class_mat)):
+        #     classification[c] = np.where(class_mat[c][:] > 0)
+
+        print("--- Creating similarity Matrix: %s seconds ---" % (time.time() - start_time))
+        similMat = self.createSimilarityMat(class_mat)
 
         # mask = np.empty(d.shape)
         # mask[:] = np.inf
@@ -421,17 +428,22 @@ class bow():
         return similMat
     
     def createSimilarityMat(self, classifications: dict):
-        img_names = list(classifications.keys())
-        img_cats = list(classifications.values())
-        size = len(img_names)
+        size = len(classifications)
         similarityMat = np.zeros([size, size])
-        for ii in range(size):
-            img_name = img_names[ii]
-            cat = classifications[img_name]
-            for jj in range(size):
-                c = img_cats[jj]
-                if cat == c and ii != jj:
-                    similarityMat[ii,jj] = 1
+        for c1 in range(size):
+            aux = [classifications[c1]]*size
+            match_list = np.multiply(aux, classifications)
+            a = np.sum(match_list, axis=1)>0
+            a[c1] = 0
+            similarityMat[c1][:] = a
+
+        # for c1 in range(size):
+        #     for c2 in range(size):
+        #         n = np.isin(img_cats[c1], img_cats[c2])
+        #         flag = np.sum(n)
+        #         if flag>0 and c1 != c2:
+        #             similarityMat[c1][c2] = 1
+            
         return similarityMat
 
     def findThreshold(self, trainh: dict, testh: dict):
@@ -539,7 +551,7 @@ def main():
     test_histogrambycat = bow_obj.compute_histogram(test_featuresbycat)
 
     # Find new threshold
-    bow_obj.findThreshold(train_histogrambycat, test_histogrambycat)
+    # bow_obj.findThreshold(train_histogrambycat, test_histogrambycat)
     # Classify the test images into the trainned categories
     print("--- Classifying test images: %s seconds ---" % (time.time() - start_time))
     classification_results = bow_obj.matchCategory(
